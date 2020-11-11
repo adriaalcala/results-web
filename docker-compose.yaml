@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - 20080:8080
+    volumes:
+      - .:/opt/:rw
+volumes:
+  data: {}
