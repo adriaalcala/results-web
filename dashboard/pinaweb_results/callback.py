@@ -24,6 +24,19 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     df = pd.read_csv(f'https://biocom.uib.es/util-aligner/v2/file/{file_id}', delimiter='\t')
     if aligner:
         df = df.rename(columns={df.columns[1]: f"{df.columns[1]}_{aligner}"})
+    species_1 = df.columns[0].split('_')[-1]
+    species_2 = df.columns[1].split('_')[-2]
+    url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/species/select'
+    req_headers = {'Accept': 'text/tab-separated-values'}
+    response = requests.post(url=url, json={'columns': ['species_id', 'official_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
+    species_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
+    df = df.rename(columns={df.columns[0]: species_dict[species_1]})
+    for i in range(1, df.shape[1]):
+        aligner_name = df.columns[i].split('_')[-1]
+        df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
+    if not aligner:
+        df['Concensus'] = df.apply(lambda row: max(Counter(row).values())/(df.shape[1]-1), axis=1)
+    
     return [html.Div(id='concensus-plot'),
             'Page size: ',
             dcc.Input(
@@ -57,7 +70,7 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
 
 def update_graph(rows):
     all_target_proteins = set()
-    alignment_keys = [k for k in rows[0].keys() if 'net2' in k]
+    alignment_keys = [k for k in rows[0].keys() if '_' in k]
     origin_key = [k for k in rows[0].keys() if k not in alignment_keys][0]
     for row in rows:
         all_target_proteins = all_target_proteins.union({row[k] for k in alignment_keys})
@@ -88,7 +101,7 @@ def update_graph(rows):
         return [] 
     fig = ff.create_annotated_heatmap(
         z=alignments_num, annotation_text=alignments_text, text=hover, hoverinfo='text', y=aligners, x=origin,
-        colorscale=[[0, "black"], [0.5, "red"], [1.0, "green"]]
+        colorscale=[[0, "black"], [0.5, "red"], [1.0, "green"]], showscale=True, zmin=-1, zmax=1
         )
     fig.update_xaxes(showticklabels=False)
 
