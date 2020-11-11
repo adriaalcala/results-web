@@ -16,6 +16,7 @@ tqdm = "==4.45.0"
 python-json-logger = "==0.1.1"
 dash-bio-utils= "*"
 dash-bio = "*"
+gunicorn== "==19.9.0"
 
 [requires]
 python_version = "3.8"
