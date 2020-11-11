@@ -14,13 +14,11 @@ from dashboard.pinaweb_results.callback import update_graph, update_table, layou
 # For the Dash deployment, we need to access the Flask application instance
 FONT_AWESOME = "https://use.fontawesome.com/releases/v5.10.2/css/all.css"
 
-server = Flask(__name__)
 
 app = dash.Dash(
     __name__,
-    routes_pathname_prefix="/",
+    url_base_pathname='/util-aligner-results/',
     external_stylesheets=[dbc.themes.BOOTSTRAP, FONT_AWESOME],
-    server=server
 )
 
 app.layout =html.Div([dcc.Location(id='url', refresh=False), html.H1('PINAWEB RESULTS', style={'text-align': 'center'}), html.Div(id='page-content')])

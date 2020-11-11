@@ -8,7 +8,5 @@ RUN pip install pipenv
 RUN pipenv install --system
 EXPOSE 8080
 COPY . /app
-RUN sed -i 's/\r//' /gunicorn.sh
-RUN chmod 777 /gunicorn.sh
+CMD python server.py
 
-CMD sh docker/gunicorn.sh
