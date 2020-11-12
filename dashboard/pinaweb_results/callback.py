@@ -28,12 +28,21 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     species_2 = df.columns[1].split('_')[-2]
     url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/species/select'
     req_headers = {'Accept': 'text/tab-separated-values'}
+
     response = requests.post(url=url, json={'columns': ['species_id', 'official_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
     species_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
+    
+    url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/proteins/select'
+    response = requests.post(url=url, json={'columns':['protein_external_id','preferred_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
+    proteins_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
+
     df = df.rename(columns={df.columns[0]: species_dict[species_1]})
-    for i in range(1, df.shape[1]):
+    df[f"{species_dict[species_1]}\npreferred name"] = df.apply(lambda row: proteins_dict.get(row[0]), axis=1)
+    num_columns = df.shape[1]
+    for i in range(1, num_columns-1):
         aligner_name = df.columns[i].split('_')[-1]
         df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
+        df[f"{species_dict[species_2]}_{aligner_name}\npreferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
     if not aligner:
         df['Concensus'] = df.apply(lambda row: max(Counter(row).values())/(df.shape[1]-1), axis=1)
     
@@ -70,8 +79,8 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
 
 def update_graph(rows):
     all_target_proteins = set()
-    alignment_keys = [k for k in rows[0].keys() if '_' in k]
-    origin_key = [k for k in rows[0].keys() if k not in alignment_keys][0]
+    alignment_keys = [k for k in rows[0].keys() if '_' in k and '\n' not in k]
+    origin_key = [k for k in rows[0].keys() if k not in alignment_keys and '\n' not in k][0]
     for row in rows:
         all_target_proteins = all_target_proteins.union({row[k] for k in alignment_keys})
     all_target_proteins = list(all_target_proteins)
