@@ -7,15 +7,15 @@ verify_ssl = true
 
 [packages]
 flask = "==1.1.2"
-dash = "==1.14.0"
-dash-html-components = "==1.0.3"
+dash = "==1.19.0"
+dash-html-components = "==1.1.2"
 waitress = "==1.4.3"
 dash-daq = "==0.5.0"
-dash-bootstrap-components = "==0.10.3"
+dash-bootstrap-components = "==0.11.3"
 tqdm = "==4.45.0"
 python-json-logger = "==0.1.1"
-dash-bio-utils= "*"
-dash-bio = "*"
+dash-bio-utils= "==0.0.6"
+dash-bio = "==0.6.1"
 gunicorn== "==19.9.0"
 
 [requires]

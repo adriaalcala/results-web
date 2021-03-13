@@ -8,15 +8,19 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 from collections import Counter
 
-df = pd.DataFrame() #pd.read_csv('dashboard/pinaweb_results/data/sample_2.tsv', delimiter='\t')
+df_dicts = {} 
+#df = pd.DataFrame() #pd.read_csv('dashboard/pinaweb_results/data/sample_2.tsv', delimiter='\t')
 
 
 def layout(job_id="5f609561ceadad3aecd73bd5"):
-    global df
-    print(job_id)
+    global df_dicts
+    if job_id in df_dicts:
+        return df_dicts[job_id]
     aligner = None
     try:
+        print('file_url', f'https://biocom.uib.es/util-aligner/v2/comparison/{job_id}')
         file_id = requests.get(f'https://biocom.uib.es/util-aligner/v2/comparison/{job_id}').json()['files']['joined_tsv']
+        print('file_id', file_id)
     except:
         data = requests.get(f'https://biocom.uib.es/util-aligner/v2/alignment/{job_id}').json()
         file_id = data['files']['alignment_tsv']
@@ -33,60 +37,38 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     species_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
     
     url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/proteins/select'
-    response = requests.post(url=url, json={'columns':['protein_external_id','preferred_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
-    proteins_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
+    response = requests.post(url=url, json={'columns':['protein_external_id','preferred_name', 'annotation'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
+    proteins_dict = dict([i.split('\t')[:2] for i in response.text.split('\n')[:-1]])
 
     df = df.rename(columns={df.columns[0]: species_dict[species_1]})
-    df[f"{species_dict[species_1]}\npreferred name"] = df.apply(lambda row: proteins_dict.get(row[0]), axis=1)
+    df[f"{species_dict[species_1]} preferred name"] = df.apply(lambda row: proteins_dict.get(row[0]), axis=1)
+    columns_to_drop = [f"{species_dict[species_1]}"]
     num_columns = df.shape[1]
     for i in range(1, num_columns-1):
         aligner_name = df.columns[i].split('_')[-1]
         df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
-        df[f"{species_dict[species_2]}_{aligner_name}\npreferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
-    if not aligner:
-        df['Concensus'] = df.apply(lambda row: max(Counter(row).values())/(df.shape[1]-1), axis=1)
+        df[f"{species_dict[species_2]}_{aligner_name} preferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
+        columns_to_drop.append(f"{species_dict[species_2]}_{aligner_name}")
     
-    return [html.Div(id='concensus-plot'),
-            'Page size: ',
-            dcc.Input(
-            id='table-concensus-plot-page-count',
-            type='number',
-            min=1,
-            max=100000,
-            value=200
-            ),
-            html.Div(dash_table.DataTable(
-                id='table-concensus-plot',
-                columns=[{"name": i, "id": i} for i in sorted(df.columns)],
-                page_current=0,
-                page_size=200,
-                page_action='custom',
-                filter_action='custom',
-                filter_query='',
-                sort_action='custom',
-                sort_mode='multi',
-                sort_by=[],
-                style_table={'overflowY': 'auto', 'overflowX': 'auto'},
-                style_cell={
-                    'height': 'auto',
-                    # all three widths are needed
-                    'minWidth': '10px', 'width': '10px', 'maxWidth': '10px',
-                    'whiteSpace': 'normal'
-                }
-            ),
-            ),
-    ]
+    df = df.drop(columns_to_drop, axis=1)
+    if not aligner:
+        df['Concensus'] = df.apply(lambda row: float("{:.2f}".format(max(Counter(row).values())/(df.shape[1]-1))), axis=1)
+    df_dicts[job_id] = df
+    columns = [{"name": i.replace('preferred name', ''), "id": i} for i in sorted(df.columns) if 'preferred' in i or 'Concensus' in i]
+    return df
+
 
 def update_graph(rows):
     all_target_proteins = set()
-    alignment_keys = [k for k in rows[0].keys() if '_' in k and '\n' not in k]
-    origin_key = [k for k in rows[0].keys() if k not in alignment_keys and '\n' not in k][0]
+    if not rows:
+        return dcc.Graph()
+    alignment_keys = [k for k in rows[0].keys() if '_' in k]
+    origin_key = [k for k in rows[0].keys() if k not in alignment_keys][0]
     for row in rows:
         all_target_proteins = all_target_proteins.union({row[k] for k in alignment_keys})
     all_target_proteins = list(all_target_proteins)
     origin = []
-    aligners = [i.split('_')[-1] for i in alignment_keys]
-    print(aligners)
+    aligners = [i.split('_')[-1].split()[0] for i in alignment_keys]
     alignments_text = [['']*len(rows) for _ in range(len(alignment_keys))]
     alignments = [[] for _ in range(len(alignment_keys))]
     alignments_num = [[] for _ in range(len(alignment_keys))]
@@ -110,7 +92,7 @@ def update_graph(rows):
         return [] 
     fig = ff.create_annotated_heatmap(
         z=alignments_num, annotation_text=alignments_text, text=hover, hoverinfo='text', y=aligners, x=origin,
-        colorscale=[[0, "black"], [0.5, "red"], [1.0, "green"]], showscale=True, zmin=-1, zmax=1
+        colorscale=[[0, "grey"], [0.5, "red"], [1.0, "green"]], showscale=False, zmin=-1, zmax=1
         )
     fig.update_xaxes(showticklabels=False)
 
@@ -150,14 +132,18 @@ def split_filter_part(filter_part):
     return [None] * 3
 
 
-def update_table(page_current, page_size, sort_by, filter):
-    filtering_expressions = filter.split(' && ')
-    dff = df
+def update_table(job_id, page_current, page_size, sort_by, col_filter):
+    filtering_expressions = col_filter.split(' && ')
+    
+    dff = layout(job_id)
     for filter_part in filtering_expressions:
         col_name, operator, filter_value = split_filter_part(filter_part)
-
         if operator in ('eq', 'ne', 'lt', 'le', 'gt', 'ge'):
             # these operators match pandas series operator method names
+            try:
+                filter_value = float(filter_value)
+            except:
+                pass
             dff = dff.loc[getattr(dff[col_name], operator)(filter_value)]
         elif operator == 'contains':
             dff = dff.loc[dff[col_name].str.contains(filter_value, na=False)]
@@ -165,7 +151,6 @@ def update_table(page_current, page_size, sort_by, filter):
             # this is a simplification of the front-end filtering logic,
             # only works with complete fields in standard format
             dff = dff.loc[dff[col_name].str.startswith(filter_value)]
-
     if len(sort_by):
         dff = dff.sort_values(
             [col['column_id'] for col in sort_by],
@@ -175,7 +160,8 @@ def update_table(page_current, page_size, sort_by, filter):
             ],
             inplace=False
         )
-
-    return dff.iloc[ 
+    dff2 = dff.iloc[ 
         page_current*page_size: (page_current + 1)*page_size
     ].to_dict('records')
+    columns = [{"name": i.replace('preferred name', '').replace('_', ''), "id": i} for i in sorted(dff.columns)]
+    return dff2, columns
