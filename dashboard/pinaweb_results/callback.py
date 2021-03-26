@@ -181,7 +181,9 @@ def get_info_data(job_id):
     req_headers = {'Accept': 'text/tab-separated-values'}
     scores = {}
     run_time = {}
-
+    alignments = {}
+    suplementary_data = {}
+    print(info['results_object_ids'])
     for alignment in info['results_object_ids']:
         print(alignment)
         data = requests.get(f'https://biocom.uib.es/util-aligner/v2/alignment/{alignment}').json()
@@ -193,6 +195,9 @@ def get_info_data(job_id):
                 'fc_score_hrss_bma': data['scores']['fc_data']['fc_score_hrss_bma']
             }
         run_time[data['aligner']] = data['results']['run_time']
+        print('files', data['files'])
+        alignments[data['aligner']] = data['files'].get('alignment_tsv')
+        suplementary_data[data['aligner']] = alignment
     response = requests.post(url=url, json={'columns': ['species_id', 'official_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
     species_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
     edge_types_1 = ', '.join(f"{score}:{value}" for score, value in info['net1']['score_thresholds'].items())
@@ -200,7 +205,33 @@ def get_info_data(job_id):
     style = {'border': '1px solid #aaaaaa', 'text-align': 'center', 'padding' : '8px'}
     style_2 = {'border': '1px solid #aaaaaa', 'text-align': 'center', 'padding' : '8px', 'background-color': "#dddddd"}
     style_3 = {'border': '1px solid #aaaaaa', 'text-align': 'center', 'padding' : '8px', 'background-color': "#eeeeee"}
-    aligners_row = [html.Th("Aligners", style=style_2)] + [html.Th(a['aligner'], style=style_3) for a in info['aligners']]
+    aligners_header_row = [
+                html.Tr(children=[
+                    html.Th("Aligner", style=style),
+                    html.Th("Alignment", style=style),
+                    html.Th("Run Time", style=style),
+                    html.Th("Suplementary Data", style=style)
+                ], style=style)
+    ]
+    aligners_row = [html.Tr(
+        children=[
+            html.Th(a['aligner'], style=style_3),
+            html.Th(html.A("alignment", href=f"https://biocom.uib.es/util-aligner/v2/file/{alignments[a['aligner']]}"), style=style_2 if idx%2 else style),
+            html.Th(f"""{int(run_time[a['aligner']])}\"""", style=style_2 if idx%2 else style),
+            html.Th(html.A("Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/alignment/{suplementary_data[a['aligner']]}"), style=style_2 if idx%2 else style),
+        ])
+        for idx, a in enumerate(info['aligners'])
+    ]
+    comparison_row = [
+        html.Tr(
+            children=[
+                html.Th('Comparison', style=style_3),
+                html.Th(html.A("joined", href=f"https://biocom.uib.es/util-aligner/v2/file/{info['results']['joined']['file']}"), style=style_2 if len(info['aligners'])%2 else style),
+                html.Th('', style=style_2 if len(info['aligners'])%2 else style),
+                html.Th(html.A(f"Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/comparison/{job_id}"), style=style_2 if len(info['aligners'])%2 else style)
+            ]
+        )
+    ]
     response = [
         html.H2('Results overview', style={ 'padding' : '16px', 'text-align': 'left' }),
         html.Table(
@@ -208,11 +239,16 @@ def get_info_data(job_id):
                 html.Tr(children=[
                     html.Th("Job results identifier", style={'text-align': 'center', 'padding' : '8px'}),
                     html.Th(job_id, style={'text-align': 'center', 'padding' : '8px'})
-                ], style={'text-align': 'center', 'padding' : '8px'}),
-                html.Tr(children=aligners_row, style=style)
+                ], style={'text-align': 'center', 'padding' : '8px'})
             ],
             style={ 'padding' : '8px', 'margin': '10px' }
         ),
+        html.Div( children=[
+        html.H4('Aligners', style={'padding': '8px' }),
+        html.Table(
+            children = aligners_header_row + aligners_row + comparison_row, style={'border': '1px solid #aaaaaa', 'text-align': 'center', 'padding' : '8px', 'width': '45%'}
+        ),
+        ],style={'align-self': 'center', 'padding': '8px'}),
         html.Div(children=[
             html.Div(children=[
                     html.H4("Input Network", style={ 'padding' : '8px' }),
@@ -235,9 +271,9 @@ def get_info_data(job_id):
                                     html.Th(info['net1_details']['n_edges'], style=style)
                             ], style=style)
                         ],
-                        style={ 'padding' : '8px' }
+                        style={ 'padding' : '8px', 'width': '100%' }
                     ),
-                ], style={ 'padding' : '8px' }
+                ], style={ 'padding' : '8px', 'width': '45%' }
             ),
             html.Div(children=[
                 html.H4("Output Network", style={ 'padding' : '8px' }),
@@ -260,9 +296,9 @@ def get_info_data(job_id):
                                 html.Th(info['net2_details']['n_edges'], style=style)
                         ], style=style)
                     ],
-                    style={ 'padding' : '8px' }
+                    style={ 'padding' : '8px', 'width': '100%' }
                 ),
-            ], style={ 'padding' : '8px' })
+            ], style={ 'padding' : '8px', 'width': '45%' })
             ],
             style={'display': 'flex', 'align-self': 'center'}
         ),
@@ -271,28 +307,29 @@ def get_info_data(job_id):
                 id='ec-score',
                 figure={
                     'data': [
-                        {'x': [a['aligner'] for a in info['aligners']], 'y': [scores[i['aligner']]['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
+                        {'x': [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {'ec': 0})['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
                     ],
                     'layout': {
                         'title': 'EC Score'
                     }
-                }
+                },
+                style={'width': '45%'}
             ),
             dcc.Graph(
                 id='fc-score',
                 figure={
                     'data': [
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores[i['aligner']]['fc_score_jaccard'] for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores[i['aligner']]['fc_score_hrss_bma'] for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
+                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_jaccard', 0) for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
+                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_hrss_bma', 0) for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
                     ],
                     'layout': {
                         'title': 'FC Score'
                     }
-                }
+                },
+                style={'width': '45%'}
             ),
-        ], style={'display':'flex', 'align-self': 'center', 'align-items': 'center'}
-        ),
-        html.A(f"Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/comparison/{job_id}", style={ 'padding' : '8px' })
+        ], style={'display':'flex', 'align-self': 'center', 'align-items': 'center', 'width': '100%'}
+        )
 
     ]
     return response
