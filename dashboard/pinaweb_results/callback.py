@@ -249,7 +249,7 @@ def get_info_data(job_id):
                         ], style=style_2),                
                         html.Tr(children=[
                             html.Th("Edge types", style=style),
-                            html.Th(edge_types_1, style=style)
+                            html.Th(edge_types_2, style=style)
                         ], style=style),
                         html.Tr(children=[
                             html.Th("Number of Proteins:", style=style_2),
