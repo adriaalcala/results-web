@@ -32,7 +32,7 @@ app.layout =html.Div(
                 dcc.Markdown(GRAPH_DESCRIPTION, style={'margin': '60px'}),
                 html.Div(id='page-content', children=[  
                     html.Div(id='concensus-plot'),
-                html.P(TABLE_DESCRIPTION, style={'margin': '60px'})
+                html.P(TABLE_DESCRIPTION, style={'margin': '60px'}),
                     html.Div([
                         html.P('Page size: ', id='page-size-text', style={'margin-left': '60px'}),  
                         dcc.Input(id='table-concensus-plot-page-count', type='number', min=1, max=100000, value=20, style={'margin': '6px'})
