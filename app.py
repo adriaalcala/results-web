@@ -9,7 +9,7 @@ import dash_table
 from flask import request, Flask
 
 from dashboard.pinaweb_results.callback import update_graph, update_table, layout, get_info_data
-from texts import GRAPH_DESCRIPTION
+from texts import GRAPH_DESCRIPTION, TABLE_DESCRIPTION
 # ======== #
 # DASH APP #
 # ======== #
@@ -29,9 +29,10 @@ app.layout =html.Div(
         dcc.Location(id='url', refresh=False), html.H1('PINAWEB RESULTS', id='H1-text', style={'textAlign': 'center'}),
         dcc.Tabs([
             dcc.Tab(label='Comparison', children=[
-                html.P(GRAPH_DESCRIPTION, style={'margin': '60px'}),
+                dcc.Markdown(GRAPH_DESCRIPTION, style={'margin': '60px'}),
                 html.Div(id='page-content', children=[  
                     html.Div(id='concensus-plot'),
+                html.P(TABLE_DESCRIPTION, style={'margin': '60px'})
                     html.Div([
                         html.P('Page size: ', id='page-size-text', style={'margin-left': '60px'}),  
                         dcc.Input(id='table-concensus-plot-page-count', type='number', min=1, max=100000, value=20, style={'margin': '6px'})
