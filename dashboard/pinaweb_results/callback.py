@@ -12,6 +12,20 @@ df_dicts = {}
 response_dict = {}
 #df = pd.DataFrame() #pd.read_csv('dashboard/pinaweb_results/data/sample_2.tsv', delimiter='\t')
 
+ALIGNERS = {
+    'alignet': 'AligNet',
+    'hubalign': 'HubAlign',
+    'l-graal': 'L-GRAAL', 
+    'pinalog': 'PINALOG',
+    'spinal': 'SPINAL'
+}
+
+
+def compute_consensus(row):
+    n = len(row)
+    clean_row = [i for i in row if type(i) == str]
+    return max(Counter(clean_row).values())/n
+
 
 def layout(job_id="5f609561ceadad3aecd73bd5"):
     global df_dicts
@@ -50,14 +64,15 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     columns_to_drop = [f"{species_dict[species_1]}"]
     num_columns = df.shape[1]
     for i in range(1, num_columns-1):
-        aligner_name = df.columns[i].split('_')[-1]
+        aligner_name_raw  = df.columns[i].split('_')[-1]
+        aligner_name = ALIGNERS.get(aligner_name_raw, aligner_name_raw)
         df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
         df[f"{species_dict[species_2]}_{aligner_name} preferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
         columns_to_drop.append(f"{species_dict[species_2]}_{aligner_name}")
     
     df = df.drop(columns_to_drop, axis=1)
     if not aligner:
-        df['Consensus'] = df.apply(lambda row: float("{:.2f}".format(max(Counter(row).values())/(df.shape[1]-1))), axis=1)
+        df['Consensus'] = df.apply(compute_consensus, axis=1)
     df_dicts[job_id] = df
     columns = [{"name": i.replace('preferred name', ''), "id": i} for i in sorted(df.columns) if 'preferred' in i or 'Concensus' in i]
     print(columns)
@@ -74,7 +89,8 @@ def update_graph(rows):
         all_target_proteins = all_target_proteins.union({row[k] for k in alignment_keys})
     all_target_proteins = list(all_target_proteins)
     origin = []
-    aligners = [i.split('_')[-1].split()[0] for i in alignment_keys]
+    aligners_raw = [i.split('_')[-1].split()[0] for i in alignment_keys]
+    aligners = sorted([ALIGNERS.get(i, i) for i in aligners_raw])
     alignments_text = [['']*len(rows) for _ in range(len(alignment_keys))]
     alignments = [[] for _ in range(len(alignment_keys))]
     alignments_num = [[] for _ in range(len(alignment_keys))]
@@ -215,12 +231,12 @@ def get_info_data(job_id):
     ]
     aligners_row = [html.Tr(
         children=[
-            html.Th(a['aligner'], style=style_3),
+            html.Th(ALIGNERS.get(a['aligner'], a['aligner']), style=style_3),
             html.Th(html.A("alignment", href=f"https://biocom.uib.es/util-aligner/v2/file/{alignments[a['aligner']]}"), style=style_2 if idx%2 else style),
             html.Th(f"""{int(run_time[a['aligner']])}\"""", style=style_2 if idx%2 else style),
             html.Th(html.A("Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/alignment/{suplementary_data[a['aligner']]}"), style=style_2 if idx%2 else style),
         ])
-        for idx, a in enumerate(info['aligners'])
+        for idx, a in enumerate(sorted(info['aligners'], key=lambda x: x['aligner']))
     ]
     comparison_row = [
         html.Tr(
@@ -307,7 +323,7 @@ def get_info_data(job_id):
                 id='ec-score',
                 figure={
                     'data': [
-                        {'x': [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {'ec': 0})['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
+                        {'x': [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {'ec': 0})['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
                     ],
                     'layout': {
                         'title': 'EC Score'
@@ -319,8 +335,8 @@ def get_info_data(job_id):
                 id='fc-score',
                 figure={
                     'data': [
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_jaccard', 0) for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_hrss_bma', 0) for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
+                        {'x':  [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_jaccard', 0) for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
+                        {'x':  [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_hrss_bma', 0) for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
                     ],
                     'layout': {
                         'title': 'FC Score'
