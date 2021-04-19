@@ -22,8 +22,10 @@ ALIGNERS = {
 
 
 def compute_consensus(row):
-    n = len(row)
+    n = len(row) - 1
     clean_row = [i for i in row if type(i) == str]
+    if not clean_row:
+        return 0
     return max(Counter(clean_row).values())/n
 
 
@@ -73,6 +75,7 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     df = df.drop(columns_to_drop, axis=1)
     if not aligner:
         df['Consensus'] = df.apply(compute_consensus, axis=1)
+    df = df[df['Consensus'] > 0]
     df_dicts[job_id] = df
     columns = [{"name": i.replace('preferred name', ''), "id": i} for i in sorted(df.columns) if 'preferred' in i or 'Concensus' in i]
     print(columns)
