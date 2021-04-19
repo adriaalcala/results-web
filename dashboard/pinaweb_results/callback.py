@@ -12,6 +12,22 @@ df_dicts = {}
 response_dict = {}
 #df = pd.DataFrame() #pd.read_csv('dashboard/pinaweb_results/data/sample_2.tsv', delimiter='\t')
 
+ALIGNERS = {
+    'alignet': 'AligNet',
+    'hubalign': 'HubAlign',
+    'l-graal': 'L-GRAAL', 
+    'pinalog': 'PINALOG',
+    'spinal': 'SPINAL'
+}
+
+
+def compute_consensus(row):
+    n = len(row) - 1
+    clean_row = [i for i in row[1:] if type(i) == str]
+    if not clean_row:
+        return 0
+    return max(Counter(clean_row).values())/n
+
 
 def layout(job_id="5f609561ceadad3aecd73bd5"):
     global df_dicts
@@ -31,36 +47,49 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
         df = df.rename(columns={df.columns[1]: f"{df.columns[1]}_{aligner}"})
     if 'custom' in df.columns[0]:
         species_1 = '-1'
+        proteins_species_1 = df.columns[0].split('_')[-1]
     else:
         species_1 = df.columns[0].split('_')[-1]
-    species_2 = df.columns[1].split('_')[-2]
+        proteins_species_1 = df.columns[0].split('_')[-1]
+    if 'custom' in df.columns[1]:
+        species_2 = '-1'
+        proteins_species_2 = df.columns[1].split('_')[-2]
+    else:
+        species_2 = df.columns[1].split('_')[-2]
+        proteins_species_2 = df.columns[1].split('_')[-2]
+
     url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/species/select'
     req_headers = {'Accept': 'text/tab-separated-values'}
-    print(species_1, species_2)
     response = requests.post(url=url, json={'columns': ['species_id', 'official_name'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
     species_dict = dict([i.split('\t') for i in response.text.split('\n')[:-1]])
     if species_1 not in species_dict:
         species_dict[species_1] = 'Custom'
+    if species_2 not in species_dict:
+        species_dict[species_2] = 'Custom'
     url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/proteins/select'
-    response = requests.post(url=url, json={'columns':['protein_external_id','preferred_name', 'annotation'], 'filter':{'species_id':[int(species_1), int(species_2)]}}, headers=req_headers)
+    response = requests.post(url=url, json={'columns':['protein_external_id','preferred_name', 'annotation'], 'filter':{'species_id':[int(proteins_species_1), int(proteins_species_2)]}}, headers=req_headers)
     proteins_dict = dict([i.split('\t')[:2] for i in response.text.split('\n')[:-1]])
 
     df = df.rename(columns={df.columns[0]: species_dict[species_1]})
     df[f"{species_dict[species_1]} preferred name"] = df.apply(lambda row: proteins_dict.get(row[0]), axis=1)
     columns_to_drop = [f"{species_dict[species_1]}"]
     num_columns = df.shape[1]
+    print('df-1', df)
     for i in range(1, num_columns-1):
         aligner_name = df.columns[i].split('_')[-1]
         df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
         df[f"{species_dict[species_2]}_{aligner_name} preferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
+        print()
         columns_to_drop.append(f"{species_dict[species_2]}_{aligner_name}")
     
     df = df.drop(columns_to_drop, axis=1)
     if not aligner:
-        df['Consensus'] = df.apply(lambda row: float("{:.2f}".format(max(Counter(row).values())/(df.shape[1]-1))), axis=1)
+        df['Consensus'] = df.apply(compute_consensus, axis=1)
+    if 'Consensus' in df:
+        df = df[df['Consensus'] > 0]
     df_dicts[job_id] = df
+    print('df-2', df)
     columns = [{"name": i.replace('preferred name', ''), "id": i} for i in sorted(df.columns) if 'preferred' in i or 'Concensus' in i]
-    print(columns)
     return df
 
 
@@ -74,7 +103,8 @@ def update_graph(rows):
         all_target_proteins = all_target_proteins.union({row[k] for k in alignment_keys})
     all_target_proteins = list(all_target_proteins)
     origin = []
-    aligners = [i.split('_')[-1].split()[0] for i in alignment_keys]
+    aligners_raw = [i.split('_')[-1].split()[0] for i in alignment_keys]
+    aligners = [ALIGNERS.get(i, i) for i in aligners_raw]
     alignments_text = [['']*len(rows) for _ in range(len(alignment_keys))]
     alignments = [[] for _ in range(len(alignment_keys))]
     alignments_num = [[] for _ in range(len(alignment_keys))]
@@ -175,6 +205,8 @@ def update_table(job_id, page_current, page_size, sort_by, col_filter):
 
 def get_info_data(job_id):
     info = requests.get(f'https://biocom.uib.es/util-aligner/v2/comparison/{job_id}').json()
+    if not info:
+        info  = requests.get(f'https://biocom.uib.es/util-aligner/v2/alignment/{job_id}').json()
     species_1 = str(info['net1']['species_id'])
     species_2 = str(info['net2']['species_id'])
     url = 'http://ltimbigd2.uib.es:11080/db/stringdb/items/species/select'
@@ -183,8 +215,9 @@ def get_info_data(job_id):
     run_time = {}
     alignments = {}
     suplementary_data = {}
-    print(info['results_object_ids'])
-    for alignment in info['results_object_ids']:
+    if 'aligners' not in info:
+        info['aligners'] = [info,]
+    for alignment in info.get('results_object_ids', [job_id]):
         print(alignment)
         data = requests.get(f'https://biocom.uib.es/util-aligner/v2/alignment/{alignment}').json()
         print(data.keys())
@@ -222,16 +255,19 @@ def get_info_data(job_id):
         ])
         for idx, a in enumerate(info['aligners'])
     ]
-    comparison_row = [
-        html.Tr(
-            children=[
-                html.Th('Comparison', style=style_3),
-                html.Th(html.A("joined", href=f"https://biocom.uib.es/util-aligner/v2/file/{info['results']['joined']['file']}"), style=style_2 if len(info['aligners'])%2 else style),
-                html.Th('', style=style_2 if len(info['aligners'])%2 else style),
-                html.Th(html.A(f"Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/comparison/{job_id}"), style=style_2 if len(info['aligners'])%2 else style)
-            ]
-        )
-    ]
+    if 'joined' in info['results']:
+        comparison_row = [
+            html.Tr(
+                children=[
+                    html.Th('Comparison', style=style_3),
+                    html.Th(html.A("joined", href=f"https://biocom.uib.es/util-aligner/v2/file/{info['results']['joined']['file']}"), style=style_2 if len(info['aligners'])%2 else style),
+                    html.Th('', style=style_2 if len(info['aligners'])%2 else style),
+                    html.Th(html.A(f"Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/comparison/{job_id}"), style=style_2 if len(info['aligners'])%2 else style)
+                ]
+            )
+        ]
+    else:
+        comparison_row = []
     response = [
         html.H2('Results overview', style={ 'padding' : '16px', 'text-align': 'left' }),
         html.Table(

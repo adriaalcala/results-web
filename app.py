@@ -28,8 +28,8 @@ app.layout =html.Div(
     [
         dcc.Location(id='url', refresh=False), html.H1('PINAWEB RESULTS', id='H1-text', style={'textAlign': 'center'}),
         dcc.Tabs([
-            dcc.Tab(label='Comparison', children=[
-                dcc.Markdown(GRAPH_DESCRIPTION, style={'margin': '60px'}),
+            dcc.Tab(id='comparison-tab', label='Comparison', children=[
+                dcc.Markdown(id='graph-description', children=[GRAPH_DESCRIPTION], style={'margin': '60px'}),
                 html.Div(id='page-content', children=[  
                     html.Div(id='concensus-plot'),
                 html.P(TABLE_DESCRIPTION, style={'margin': '60px'}),
@@ -73,7 +73,10 @@ app.layout =html.Div(
     [Output('table-concensus-plot', "data"),
     Output('table-concensus-plot', "columns"),
     Output('concensus-plot', "children"),
-    Output('info', "children")],
+    Output('info', "children"),
+    Output('comparison-tab', "label"),
+    Output('graph-description', "children")
+    ],
     [Input('table-concensus-plot', "page_current"),
     Input('table-concensus-plot', "page_size"),
     Input('table-concensus-plot', "sort_by"),
@@ -82,7 +85,8 @@ def update_consensus_table(page_current, page_size, sort_by, filter_query):
     job_id = request.headers['Referer'].split('/')[-1]
     rows, columns = update_table(job_id, page_current, page_size, sort_by, filter_query)
     info_data = get_info_data(job_id)
-    return rows, columns, update_graph(rows), info_data
+    print(columns)
+    return rows, columns, update_graph(rows), info_data, 'Comparison' if len(columns) > 2 else 'Alignment', [GRAPH_DESCRIPTION] if len(columns) > 2 else []
 
 @app.callback(
     Output('table-concensus-plot', "page_size"),
