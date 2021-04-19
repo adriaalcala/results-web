@@ -76,7 +76,8 @@ def layout(job_id="5f609561ceadad3aecd73bd5"):
     num_columns = df.shape[1]
     print('df-1', df)
     for i in range(1, num_columns-1):
-        aligner_name = df.columns[i].split('_')[-1]
+        aligner_name_raw  = df.columns[i].split('_')[-1]
+        aligner_name = ALIGNERS.get(aligner_name_raw, aligner_name_raw)
         df = df.rename(columns={df.columns[i]: f"{species_dict[species_2]}_{aligner_name}"})
         df[f"{species_dict[species_2]}_{aligner_name} preferred name"] = df.apply(lambda row: proteins_dict.get(row[i]), axis=1)
         print()
@@ -248,12 +249,12 @@ def get_info_data(job_id):
     ]
     aligners_row = [html.Tr(
         children=[
-            html.Th(a['aligner'], style=style_3),
+            html.Th(ALIGNERS.get(a['aligner'], a['aligner']), style=style_3),
             html.Th(html.A("alignment", href=f"https://biocom.uib.es/util-aligner/v2/file/{alignments[a['aligner']]}"), style=style_2 if idx%2 else style),
             html.Th(f"""{int(run_time[a['aligner']])}\"""", style=style_2 if idx%2 else style),
             html.Th(html.A("Suplementary data", href=f"https://biocom.uib.es/util-aligner/v2/alignment/{suplementary_data[a['aligner']]}"), style=style_2 if idx%2 else style),
         ])
-        for idx, a in enumerate(info['aligners'])
+        for idx, a in enumerate(sorted(info['aligners'], key=lambda x: x['aligner']))
     ]
     if 'joined' in info['results']:
         comparison_row = [
@@ -343,7 +344,7 @@ def get_info_data(job_id):
                 id='ec-score',
                 figure={
                     'data': [
-                        {'x': [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {'ec': 0})['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
+                        {'x': [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {'ec': 0})['ec'] for i in info['aligners']], 'type': 'bar', 'name': 'EC Score'},
                     ],
                     'layout': {
                         'title': 'EC Score'
@@ -355,8 +356,8 @@ def get_info_data(job_id):
                 id='fc-score',
                 figure={
                     'data': [
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_jaccard', 0) for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
-                        {'x':  [a['aligner'] for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_hrss_bma', 0) for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
+                        {'x':  [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_jaccard', 0) for i in info['aligners']], 'type': 'bar', 'name': 'Jaccard Score'},
+                        {'x':  [ALIGNERS.get(a['aligner'], a['aligner']) for a in info['aligners']], 'y': [scores.get(i['aligner'], {}).get('fc_score_hrss_bma', 0) for i in info['aligners']], 'type': 'bar', 'name': 'HRSS Score'},
                     ],
                     'layout': {
                         'title': 'FC Score'
